@@ -1,0 +1,13 @@
+# Training configuration
+train:
+  dataset_name: "ETT/ETTh1.csv" # Specify the dataset to use (e.g., "ETT/ETTh1.csv", "PEMS/PEMS04.csv", "Electricity/Electricity.csv", "Weather/Weather.csv", "Solar/Solar.csv")
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.0003
+  optimizer: "Adam"
+  loss_function: "MSE"
+  scheduler: "CosineAnnealingLR"
+  device: "cuda" # or "cpu"
+  seed: 42
+  save_path: "checkpoints/"
+  log_interval: 10

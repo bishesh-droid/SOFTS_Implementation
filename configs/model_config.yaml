@@ -1,0 +1,10 @@
+# Model hyperparameters for SOFTS
+model:
+  input_dim: 7      # Number of input features (channels)
+  # output_dim: 7     # Number of output features (channels) - implicitly input_dim
+  seq_len: 96       # Lookback window length (L)
+  pred_len: 96      # Prediction horizon (H)
+  hidden_dim: 128   # Hidden dimension (d)
+  core_dim: 64      # Core dimension (d')
+  num_layers: 2     # Number of STAR layers (N)
+  dropout: 0.1

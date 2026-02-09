@@ -91,8 +91,7 @@ def evaluate_model(config_path="configs/train_config.yaml", model_config_path="c
     avg_mae = total_mae / num_batches
     avg_mse = total_mse / num_batches
 
-    print(f"
---- Evaluation Results ---")
+    print(f"--- Evaluation Results ---")
     print(f"Average MAE: {avg_mae:.4f}")
     print(f"Average MSE: {avg_mse:.4f}")
     print(f"--------------------------")

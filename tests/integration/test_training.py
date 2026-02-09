@@ -2,8 +2,8 @@ import pytest
 import os
 import torch
 import yaml
-from scripts.train import train_model
-from scripts.evaluate import evaluate_model
+from src.training.train import train_model
+from src.evaluation.evaluate import evaluate_model
 from data.scripts.download_data import download_ett_data
 
 # Define paths relative to the project root
@@ -23,12 +23,35 @@ def setup_data_and_configs():
     if not os.path.exists(dummy_data_path):
         download_ett_data(raw_data_path=DATA_RAW_DIR)
 
-    # Create test config files
-    test_train_config_path = os.path.join(CONFIGS_DIR, "test_train_config.yaml")
-    test_model_config_path = os.path.join(CONFIGS_DIR, "test_model_config.yaml")
+    # Create test config file
+    test_experiment_config_path = os.path.join(CONFIGS_DIR, "test_experiment_config.yaml")
 
-    # Minimal train config for testing
-    test_train_config_content = {
+    # Unified experiment config for testing
+    test_experiment_config_content = {
+        'experiment': {
+            'name': 'test_experiment',
+            'seed': 42,
+            'device': "cpu"
+        },
+        'data': {
+            'dataset_name': 'ETTh1',
+            'seq_len': 24,
+            'pred_len': 12,
+            'target_cols': None, # Let dataset infer
+            'noise_level': 0.0
+        },
+        'model': {
+            'name': 'SOFTS',
+            'input_dim': 7, # Will be inferred by train_model, but good to have a default
+            'output_dim': 7,
+            'seq_len': 24,
+            'pred_len': 12,
+            'hidden_dim': 16,
+            'core_dim': 8,
+            'num_layers': 1,
+            'dropout': 0.0,
+            'use_simple_core': False
+        },
         'train': {
             'epochs': 1, # Only 1 epoch for quick test
             'batch_size': 4,
@@ -42,35 +65,16 @@ def setup_data_and_configs():
             'log_interval': 1
         }
     }
-    with open(test_train_config_path, 'w') as f:
-        yaml.safe_dump(test_train_config_content, f)
+    with open(test_experiment_config_path, 'w') as f:
+        yaml.safe_dump(test_experiment_config_content, f)
 
-    # Minimal model config for testing
-    test_model_config_content = {
-        'model': {
-            'input_dim': 7,
-            'output_dim': 7,
-            'seq_len': 24, # Smaller seq_len for quick test
-            'pred_len': 12, # Smaller pred_len for quick test
-            'hidden_dim': 16,
-            'core_dim': 8,
-            'num_layers': 1,
-            'dropout': 0.0
-        }
-    }
-    with open(test_model_config_path, 'w') as f:
-        yaml.safe_dump(test_model_config_content, f)
-
-    # Yield control to tests
     yield
 
     # Teardown: clean up generated files
     if os.path.exists(dummy_data_path):
         os.remove(dummy_data_path)
-    if os.path.exists(test_train_config_path):
-        os.remove(test_train_config_path)
-    if os.path.exists(test_model_config_path):
-        os.remove(test_model_config_path)
+    if os.path.exists(test_experiment_config_path):
+        os.remove(test_experiment_config_path)
     if os.path.exists(CHECKPOINTS_DIR):
         for f in os.listdir(CHECKPOINTS_DIR):
             os.remove(os.path.join(CHECKPOINTS_DIR, f))
@@ -81,11 +85,10 @@ def test_training_run():
     Tests if the training script runs without errors for a minimal configuration.
     Checks if a model checkpoint is saved.
     """
-    test_train_config_path = os.path.join(CONFIGS_DIR, "test_train_config.yaml")
-    test_model_config_path = os.path.join(CONFIGS_DIR, "test_model_config.yaml")
+    test_experiment_config_path = os.path.join(CONFIGS_DIR, "test_experiment_config.yaml")
 
     # Run training
-    train_model(test_train_config_path, test_model_config_path)
+    train_model(test_experiment_config_path)
 
     # Check if a checkpoint was saved
     checkpoints = os.listdir(CHECKPOINTS_DIR)
@@ -96,16 +99,32 @@ def test_evaluation_run():
     """
     Tests if the evaluation script runs without errors using a saved checkpoint.
     """
-    test_train_config_path = os.path.join(CONFIGS_DIR, "test_train_config.yaml")
-    test_model_config_path = os.path.join(CONFIGS_DIR, "test_model_config.yaml")
+    test_experiment_config_path = os.path.join(CONFIGS_DIR, "test_experiment_config.yaml")
 
     # Ensure a model is trained and saved first
-    train_model(test_train_config_path, test_model_config_path)
+    train_model(test_experiment_config_path)
     checkpoints = os.listdir(CHECKPOINTS_DIR)
     latest_checkpoint = sorted([os.path.join(CHECKPOINTS_DIR, f) for f in checkpoints if f.endswith('.pth')], key=os.path.getmtime, reverse=True)[0]
 
+    # Load the experiment config to extract train and model config parts for evaluate_model
+    with open(test_experiment_config_path, 'r') as f:
+        experiment_config = yaml.safe_load(f)
+    
+    # Create temporary config files for evaluate_model
+    temp_train_config_path = os.path.join(CONFIGS_DIR, "temp_eval_train_config.yaml")
+    temp_model_config_path = os.path.join(CONFIGS_DIR, "temp_eval_model_config.yaml")
+
+    with open(temp_train_config_path, 'w') as f:
+        yaml.safe_dump({'train': experiment_config['train']}, f)
+    with open(temp_model_config_path, 'w') as f:
+        yaml.safe_dump({'model': experiment_config['model']}, f)
+
     # Run evaluation
-    evaluate_model(test_train_config_path, test_model_config_path, latest_checkpoint)
+    evaluate_model(temp_train_config_path, temp_model_config_path, latest_checkpoint)
+
+    # Clean up temporary config files
+    os.remove(temp_train_config_path)
+    os.remove(temp_model_config_path)
 
     # No direct assertion on metrics, just checking for no errors during run.
     # Further assertions could involve checking if metrics are within a reasonable range.

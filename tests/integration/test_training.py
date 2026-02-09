@@ -76,9 +76,8 @@ def setup_data_and_configs():
     if os.path.exists(test_experiment_config_path):
         os.remove(test_experiment_config_path)
     if os.path.exists(CHECKPOINTS_DIR):
-        for f in os.listdir(CHECKPOINTS_DIR):
-            os.remove(os.path.join(CHECKPOINTS_DIR, f))
-        os.rmdir(CHECKPOINTS_DIR)
+        import shutil
+        shutil.rmtree(CHECKPOINTS_DIR)
 
 def test_training_run():
     """
@@ -90,10 +89,13 @@ def test_training_run():
     # Run training
     train_model(test_experiment_config_path)
 
-    # Check if a checkpoint was saved
-    checkpoints = os.listdir(CHECKPOINTS_DIR)
-    assert len(checkpoints) > 0, "No model checkpoint was saved during training."
-    assert any(f.endswith('.pth') for f in checkpoints), "Saved file is not a .pth checkpoint."
+    # Check if a checkpoint was saved (checkpoints are in nested subdirectories)
+    pth_files = []
+    for root, dirs, files in os.walk(CHECKPOINTS_DIR):
+        for f in files:
+            if f.endswith('.pth'):
+                pth_files.append(os.path.join(root, f))
+    assert len(pth_files) > 0, "No .pth model checkpoint was saved during training."
 
 def test_evaluation_run():
     """
@@ -103,8 +105,13 @@ def test_evaluation_run():
 
     # Ensure a model is trained and saved first
     train_model(test_experiment_config_path)
-    checkpoints = os.listdir(CHECKPOINTS_DIR)
-    latest_checkpoint = sorted([os.path.join(CHECKPOINTS_DIR, f) for f in checkpoints if f.endswith('.pth')], key=os.path.getmtime, reverse=True)[0]
+    pth_files = []
+    for root, dirs, files in os.walk(CHECKPOINTS_DIR):
+        for f in files:
+            if f.endswith('.pth'):
+                pth_files.append(os.path.join(root, f))
+    assert len(pth_files) > 0, "No .pth checkpoint found for evaluation."
+    latest_checkpoint = sorted(pth_files, key=os.path.getmtime, reverse=True)[0]
 
     # Load the experiment config to extract train and model config parts for evaluate_model
     with open(test_experiment_config_path, 'r') as f:

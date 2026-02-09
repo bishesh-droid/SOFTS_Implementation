@@ -21,7 +21,7 @@ def setup_data_and_configs():
     os.makedirs(DATA_RAW_DIR, exist_ok=True)
     dummy_data_path = os.path.join(DATA_RAW_DIR, "ETTh1.csv")
     if not os.path.exists(dummy_data_path):
-        download_ett_data(raw_data_path=DATA_RAW_DIR)
+        download_ett_data()
 
     # Create test config file
     test_experiment_config_path = os.path.join(CONFIGS_DIR, "test_experiment_config.yaml")

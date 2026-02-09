@@ -3,9 +3,9 @@ import yaml
 import os
 import torch
 
-from scripts.train import train_model
-from scripts.evaluate import evaluate_model
-from data.scripts.download_data import download_all_datasets
+from softs_implementation.scripts.train import train_model
+from softs_implementation.scripts.evaluate import evaluate_model
+from softs_implementation.data.scripts.download_data import download_all_datasets
 
 def main():
     parser = argparse.ArgumentParser(description="Run SOFTS model training or evaluation.")

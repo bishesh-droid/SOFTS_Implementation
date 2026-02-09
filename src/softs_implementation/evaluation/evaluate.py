@@ -6,11 +6,11 @@ import os
 from tqdm import tqdm
 import numpy as np
 
-from src.models.softs_model import SOFTS
-from src.data_processing.dataset import TimeSeriesDataset
-from src.data_processing.transforms import ReversibleInstanceNormalization
-from src.utils.metrics import MSE, MAE
-from src.utils.helpers import set_seed
+from softs_implementation.models.softs_model import SOFTS
+from softs_implementation.data_processing.dataset import TimeSeriesDataset
+from softs_implementation.data_processing.transforms import ReversibleInstanceNormalization
+from softs_implementation.utils.metrics import MSE, MAE
+from softs_implementation.utils.helpers import set_seed
 
 def evaluate_model(config_path="configs/train_config.yaml", model_config_path="configs/model_config.yaml", checkpoint_path=None):
     with open(config_path, 'r') as f:

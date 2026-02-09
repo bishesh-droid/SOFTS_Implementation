@@ -1,7 +1,7 @@
 import pytest
 import torch
-from src.models.softs_model import SOFTS, STarModule, MLP, StochasticPooling
-from src.data_processing.transforms import ReversibleInstanceNormalization
+from softs_implementation.models.softs_model import SOFTS, STarModule, MLP, StochasticPooling
+from softs_implementation.data_processing.transforms import ReversibleInstanceNormalization
 
 # --- Test MLP ---
 def test_mlp_forward():

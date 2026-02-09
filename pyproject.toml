@@ -6,6 +6,8 @@ authors = ["Your Name <your.email@example.com>"]
 license = "MIT"
 readme = "README.md"
 
+packages = [{ include = "softs_implementation", from = "src" }]
+
 [tool.poetry.dependencies]
 python = ">=3.9,<3.12"
 torch = ">=1.10.0"
@@ -19,11 +21,6 @@ tqdm = ">=4.62.0"
 pytest = ">=7.0.0"
 ipykernel = ">=6.0.0"
 flake8 = ">=6.0.0"
-
-[tool.pytest.ini_options]
-pythonpath = [
-  "."
-]
 
 [build-system]
 requires = ["poetry-core"]

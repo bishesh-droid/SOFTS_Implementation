@@ -2,9 +2,9 @@ import pytest
 import os
 import torch
 import yaml
-from src.training.train import train_model
-from src.evaluation.evaluate import evaluate_model
-from data.scripts.download_data import download_ett_data
+from softs_implementation.training.train import train_model
+from softs_implementation.evaluation.evaluate import evaluate_model
+from softs_implementation.data.scripts.download_data import download_ett_data
 
 # Define paths relative to the project root
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

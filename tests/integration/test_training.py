@@ -120,18 +120,22 @@ def test_evaluation_run():
     # Create temporary config files for evaluate_model
     temp_train_config_path = os.path.join(CONFIGS_DIR, "temp_eval_train_config.yaml")
     temp_model_config_path = os.path.join(CONFIGS_DIR, "temp_eval_model_config.yaml")
+    temp_data_config_path = os.path.join(CONFIGS_DIR, "temp_eval_data_config.yaml")
 
     with open(temp_train_config_path, 'w') as f:
         yaml.safe_dump({'train': experiment_config['train']}, f)
     with open(temp_model_config_path, 'w') as f:
         yaml.safe_dump({'model': experiment_config['model']}, f)
+    with open(temp_data_config_path, 'w') as f:
+        yaml.safe_dump({'data': experiment_config['data']}, f)
 
     # Run evaluation
-    evaluate_model(temp_train_config_path, temp_model_config_path, latest_checkpoint)
+    evaluate_model(temp_train_config_path, temp_model_config_path, latest_checkpoint, temp_data_config_path)
 
     # Clean up temporary config files
     os.remove(temp_train_config_path)
     os.remove(temp_model_config_path)
+    os.remove(temp_data_config_path)
 
     # No direct assertion on metrics, just checking for no errors during run.
     # Further assertions could involve checking if metrics are within a reasonable range.

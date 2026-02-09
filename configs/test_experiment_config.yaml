@@ -1,0 +1,32 @@
+data:
+  dataset_name: ETTh1
+  noise_level: 0.0
+  pred_len: 12
+  seq_len: 24
+  target_cols: null
+experiment:
+  device: cpu
+  name: test_experiment
+  seed: 42
+model:
+  core_dim: 8
+  dropout: 0.0
+  hidden_dim: 16
+  input_dim: 7
+  name: SOFTS
+  num_layers: 1
+  output_dim: 7
+  pred_len: 12
+  seq_len: 24
+  use_simple_core: false
+train:
+  batch_size: 4
+  device: cpu
+  epochs: 1
+  learning_rate: 0.001
+  log_interval: 1
+  loss_function: MSE
+  optimizer: Adam
+  save_path: /home/duffer/Videos/SOFTS_Implementation/checkpoints_test
+  scheduler: CosineAnnealingLR
+  seed: 42

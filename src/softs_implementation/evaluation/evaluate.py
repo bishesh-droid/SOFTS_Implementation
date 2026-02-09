@@ -12,11 +12,17 @@ from softs_implementation.data_processing.transforms import ReversibleInstanceNo
 from softs_implementation.utils.metrics import MSE, MAE
 from softs_implementation.utils.helpers import set_seed
 
-def evaluate_model(config_path="configs/train_config.yaml", model_config_path="configs/model_config.yaml", checkpoint_path=None):
+def evaluate_model(config_path="configs/train_config.yaml", model_config_path="configs/model_config.yaml", checkpoint_path=None, data_config_path=None):
     with open(config_path, 'r') as f:
         train_config = yaml.safe_load(f)['train']
     with open(model_config_path, 'r') as f:
         model_config = yaml.safe_load(f)['model']
+
+    if data_config_path:
+        with open(data_config_path, 'r') as f:
+            data_config = yaml.safe_load(f)['data']
+    else:
+        data_config = train_config
 
     set_seed(train_config['seed'])
 
@@ -24,7 +30,7 @@ def evaluate_model(config_path="configs/train_config.yaml", model_config_path="c
     print(f"Using device: {device}")
 
     # --- Data Loading ---
-    dataset_name = train_config['dataset_name']
+    dataset_name = data_config['dataset_name']
     print(f"Loading dataset: {dataset_name}")
 
     target_cols = [f'feature_{i}' for i in range(model_config['input_dim'])]

@@ -22,6 +22,8 @@ class TimeSeriesDataset(Dataset):
             noise_level (float): Standard deviation of Gaussian noise to add to input data. Default: 0.0
         """
         self.dataset_name = dataset_name
+        if not dataset_name.endswith('.csv'):
+            dataset_name = dataset_name + '.csv'
         self.data_path = os.path.join("data/raw", dataset_name)
         self.seq_len = seq_len
         self.pred_len = pred_len

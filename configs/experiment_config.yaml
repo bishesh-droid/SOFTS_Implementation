@@ -1,0 +1,29 @@
+experiment:
+  name: "softs_base_run"
+  seed: 42
+  device: "cuda"
+
+data:
+  dataset_name: "ETTh1.csv"
+  root_path: "data/raw"
+  seq_len: 96
+  pred_len: 24
+  target_cols: null # null means all columns
+  noise_level: 0.0 # Standard deviation of Gaussian noise to add during training
+
+model:
+  name: "SOFTS"
+  input_dim: 7 # Will be overwritten by dataset if meaningful
+  hidden_dim: 512
+  core_dim: 128
+  num_layers: 2
+  dropout: 0.1
+  use_simple_core: false # If true, uses SimpleCoreModule instead of STarModule
+
+train:
+  epochs: 10
+  batch_size: 32
+  learning_rate: 0.0001
+  optimizer: "Adam"
+  patience: 3
+  save_path: "checkpoints"

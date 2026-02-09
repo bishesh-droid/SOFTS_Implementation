@@ -45,6 +45,42 @@ class StochasticPooling(nn.Module):
         pooled_output = (weights * x).sum(dim=1) # (batch_size, hidden_dim)
         return pooled_output
 
+class SimpleCoreModule(nn.Module):
+    """
+    A simplified, deterministic Core Aggregate-Redistribute Module.
+    Uses Mean Pooling instead of Stochastic Pooling.
+    """
+    def __init__(self, hidden_dim, core_dim, dropout=0.0):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.core_dim = core_dim
+
+        # MLP1: Projects series representation from hidden_dim to core_dim
+        self.mlp1 = MLP(hidden_dim, core_dim, hidden_dim=hidden_dim, dropout=dropout)
+
+        # MLP2: Projects concatenated (series + core) back to hidden_dim
+        self.mlp2 = MLP(hidden_dim + core_dim, hidden_dim, hidden_dim=hidden_dim + core_dim, dropout=dropout)
+
+    def forward(self, x):
+        # x shape: (batch_size, C, hidden_dim)
+        batch_size, C, _ = x.shape
+
+        # 1. Get core representation
+        x_mlp1 = self.mlp1(x) # (batch_size, C, core_dim)
+
+        # Mean Pooling to get global core representation
+        core_representation = x_mlp1.mean(dim=1) # (batch_size, core_dim)
+
+        # 2. Repeat and Concatenate (Fuse)
+        core_repeated = core_representation.unsqueeze(1).expand(-1, C, -1) # (batch_size, C, core_dim)
+        fused_representation = torch.cat([x, core_repeated], dim=-1) # (batch_size, C, hidden_dim + core_dim)
+
+        # 3. Apply MLP2 and add residual connection
+        output = self.mlp2(fused_representation) # (batch_size, C, hidden_dim)
+        output = output + x # Residual connection
+
+        return output
+
 class STarModule(nn.Module):
     """
     STar Aggregate-Redistribute Module as described in the paper.
@@ -89,7 +125,7 @@ class SOFTS(nn.Module):
     """
     Series-cOre Fused Time Series forecaster (SOFTS) model.
     """
-    def __init__(self, input_dim, seq_len, pred_len, hidden_dim, core_dim, num_layers, dropout=0.0): # Removed output_dim as it's implicitly input_dim
+    def __init__(self, input_dim, seq_len, pred_len, hidden_dim, core_dim, num_layers, dropout=0.0, use_simple_core=False): # Removed output_dim as it's implicitly input_dim
         super().__init__()
         self.input_dim = input_dim
         # self.output_dim = output_dim # Removed as it's implicitly input_dim
@@ -101,9 +137,10 @@ class SOFTS(nn.Module):
 
 
 
-        # Stack of STar Modules
+        # Stack of Modules
+        layer_cls = SimpleCoreModule if use_simple_core else STarModule
         self.star_layers = nn.ModuleList([
-            STarModule(hidden_dim, core_dim, dropout=dropout)
+            layer_cls(hidden_dim, core_dim, dropout=dropout)
             for _ in range(num_layers)
         ])
 
@@ -153,6 +190,7 @@ class SOFTS(nn.Module):
 
         # Final Linear Predictor
         # The output of `final_predictor` is (batch_size, C, pred_len).
+        output = self.final_predictor(s_n)
 
         # Permute to (batch_size, pred_len, C, output_dim) if output_dim is 1 (single feature per channel)
         # Or if output_dim is the number of channels, then (batch_size, pred_len, output_dim)

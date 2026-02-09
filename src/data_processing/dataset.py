@@ -9,7 +9,7 @@ class TimeSeriesDataset(Dataset):
     A custom PyTorch Dataset for time series forecasting.
     Loads data from a CSV, creates input-output pairs based on sequence length and prediction length.
     """
-    def __init__(self, dataset_name, seq_len, pred_len, target_cols=None, freq='H'):
+    def __init__(self, dataset_name, seq_len, pred_len, target_cols=None, freq='H', noise_level=0.0):
         """
         Args:
             dataset_name (str): Name of the dataset file relative to data/raw/ (e.g., "ETT/ETTh1.csv").
@@ -19,6 +19,7 @@ class TimeSeriesDataset(Dataset):
                                          If None, all columns (except 'date' if present) are used.
             freq (str): Frequency of the time series data (e.g., 'H' for hourly, 'D' for daily).
                         Used for date indexing if needed, though not strictly used in this basic version.
+            noise_level (float): Standard deviation of Gaussian noise to add to input data. Default: 0.0
         """
         self.dataset_name = dataset_name
         self.data_path = os.path.join("data/raw", dataset_name)
@@ -26,6 +27,7 @@ class TimeSeriesDataset(Dataset):
         self.pred_len = pred_len
         self.target_cols = target_cols
         self.freq = freq
+        self.noise_level = noise_level
         self._load_data()
 
     def _load_data(self):
@@ -63,7 +65,19 @@ class TimeSeriesDataset(Dataset):
         r_end = r_begin + self.pred_len
         seq_y = self.data[r_begin:r_end]
 
-        return torch.from_numpy(seq_x), torch.from_numpy(seq_y)
+        # Convert to tensor
+        seq_x = torch.from_numpy(seq_x)
+        seq_y = torch.from_numpy(seq_y)
+
+        # Add noise if specified and in training mode (simple heuristic: if noise_level > 0)
+        # Note: Ideally this should be controlled by a mode flag in __init__, but for now
+        # we assume this dataset is used for training if noise is enabled.
+        # To be cleaner, we could add a 'train' mode flag.
+        if hasattr(self, 'noise_level') and self.noise_level > 0:
+             noise = torch.randn_like(seq_x) * self.noise_level
+             seq_x = seq_x + noise
+
+        return seq_x, seq_y
 
 if __name__ == '__main__':
     # Example Usage:

@@ -14,17 +14,21 @@ This project reproduces and extends the SOFTS model for multivariate time series
 - ✅ **Advanced Training**: Learning rate schedulers, gradient clipping, early stopping
 - ✅ **Robust Error Handling**: NaN/Inf detection, shape validation, informative error messages
 - ✅ **Extensive Testing**: Unit and integration tests for all components
+- ✅ **PyTorch 2.6 Compatible**: Fully compatible with PyTorch 2.6+ with proper checkpoint loading
 
 ## Getting Started
 
 ### Prerequisites
 
-*   Python 3.9+
-*   PyTorch
+*   Python 3.9+ (tested up to Python 3.13)
+*   PyTorch 1.10+ (compatible with PyTorch 2.6+)
 *   Pandas
 *   NumPy
 *   Scikit-learn
 *   PyYAML
+*   tqdm
+
+**Note on PyTorch 2.6+**: This implementation is fully compatible with PyTorch 2.6 and later versions. Checkpoint loading uses `weights_only=False` for trusted model files containing training history.
 
 ### Installation
 
@@ -41,6 +45,10 @@ This project reproduces and extends the SOFTS model for multivariate time series
 3.  Install the required packages:
     ```bash
     pip install -r requirements.txt
+    ```
+4.  Install the package in development mode:
+    ```bash
+    pip install -e .
     ```
 
 ## Development
@@ -71,7 +79,7 @@ The model behavior can be customized via `configs/experiment_config.yaml`:
 - `hidden_dim`, `core_dim`, `num_layers`: Model architecture parameters
 
 **Training Configuration:**
-- `scheduler`: Learning rate scheduler (CosineAnnealingLR, StepLR, ReduceLROROnPlateau, or null)
+- `scheduler`: Learning rate scheduler (CosineAnnealingLR, StepLR, ReduceLROnPlateau, or null)
 - `gradient_clip`: Gradient clipping threshold (set to null to disable)
 - `early_stopping_patience`: Number of epochs without improvement before stopping (set to null to disable)
 - `learning_rate`, `batch_size`, `epochs`: Standard training hyperparameters
@@ -103,6 +111,7 @@ This implementation includes several enhancements beyond the base paper:
 3. **Training Enhancements** - Learning rate scheduling, gradient clipping, early stopping
 4. **Robust Implementation** - Extensive error handling and numerical stability checks
 5. **Comprehensive Testing** - Full test coverage for all components
+6. **PyTorch 2.6 Support** - Fully compatible with the latest PyTorch versions
 
 See `CHANGELOG.md` for detailed documentation of all changes.
 
@@ -111,13 +120,52 @@ See `CHANGELOG.md` for detailed documentation of all changes.
 **KeyError about column names:**
 - Ensure `target_cols` in your config matches the actual column names in your dataset
 - Set `target_cols: null` to automatically use all available columns
+- Check the error message for a list of available columns
 
 **NaN/Inf during training:**
 - Enable gradient clipping: `gradient_clip: 1.0`
 - Reduce learning rate
 - Check input data for extreme values
+- Enable layer normalization: `use_layer_norm: true`
 
 **Model not improving:**
 - Try enabling layer normalization: `use_layer_norm: true`
 - Adjust learning rate scheduler parameters
 - Increase model capacity (hidden_dim, num_layers)
+- Check for early stopping triggering too soon
+
+**PyTorch 2.6 checkpoint loading errors:**
+- This implementation uses `weights_only=False` for checkpoint loading (already fixed)
+- If you encounter issues with custom checkpoints, ensure they're from trusted sources
+- The error "Weights only load failed" has been resolved in the latest version
+
+**Integration test failures:**
+- Ensure the package is installed: `pip install -e .`
+- Check that dataset files exist in `data/raw/`
+- Verify Python version is 3.9-3.13
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+- All tests pass: `pytest tests/ -v`
+- Code follows PEP 8 guidelines
+- New features include unit tests
+- Documentation is updated
+
+## License
+
+MIT License - See LICENSE file for details
+
+## Citation
+
+If you use this implementation in your research, please cite the original paper:
+
+```bibtex
+@inproceedings{han2024softs,
+  title={SOFTS: Efficient Multivariate Time Series Forecasting with Series-Core Fusion},
+  author={Han, Lu and Chen, Xu-Yang and Ye, Han-Jia and Zhan, De-Chuan},
+  booktitle={NeurIPS},
+  year={2024}
+}
+```
+

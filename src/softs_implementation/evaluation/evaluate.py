@@ -64,7 +64,7 @@ def evaluate_model(config_path="configs/train_config.yaml", model_config_path="c
     ).to(device)
 
     if checkpoint_path:
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
         if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
             model.load_state_dict(checkpoint['model_state_dict'])
         else:

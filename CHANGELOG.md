@@ -34,6 +34,7 @@ All notable changes to the SOFTS implementation will be documented in this file.
 - **NaN/Inf Detection**: Added runtime checks in STAR modules and training loop for numerical stability
 - **Type Hints**: Added comprehensive type hints throughout the codebase
 - **Shape Assertions**: Added validation to catch dimension mismatches early
+- **PyTorch 2.6 Compatibility**: Fixed checkpoint loading by adding `weights_only=False` parameter to `torch.load` for trusted checkpoint files
 
 ### Changed
 - **StochasticPooling**: Changed from deterministic softmax-based averaging to true stochastic sampling during training

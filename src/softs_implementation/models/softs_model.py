@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from typing import Tuple, Optional
 
 class MLP(nn.Module):
     """
@@ -28,42 +29,105 @@ class StochasticPooling(nn.Module):
     """
     Stochastic Pooling as described in the paper (Appendix B.2).
     Combines advantages of mean and max pooling.
-    The paper describes sampling from a multinomial distribution during training
-    and probabilistic averaging during testing. For simplicity and stability,
-    this implementation uses a weighted average based on softmax for both training and evaluation,
-    which aligns with the test-time description and is a common approximation for stochastic pooling.
+    
+    During training: Samples from a multinomial distribution based on normalized activations.
+    During evaluation: Uses probabilistic averaging (weighted average based on softmax).
+    
+    Args:
+        input_dim: Hidden dimension size
+        eps: Small constant for numerical stability
     """
-    def __init__(self, input_dim):
+    def __init__(self, input_dim: int, eps: float = 1e-8):
         super().__init__()
         self.input_dim = input_dim
+        self.eps = eps
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of stochastic pooling.
+        
+        Args:
+            x: Input tensor of shape (batch_size, C, hidden_dim)
+            
+        Returns:
+            Pooled output of shape (batch_size, hidden_dim)
+        """
         # x shape: (batch_size, C, hidden_dim)
-        # Apply softmax over channels for each feature dimension to get weights
-        weights = F.softmax(x, dim=1) # (batch_size, C, hidden_dim)
-        # Compute weighted sum across channels
-        pooled_output = (weights * x).sum(dim=1) # (batch_size, hidden_dim)
-        return pooled_output
+        batch_size, C, hidden_dim = x.shape
+        
+        if self.training:
+            # Training mode: True stochastic sampling
+            # Normalize activations to get probabilities for each channel
+            # Apply across channels (dim=1) for each feature dimension
+            x_normalized = torch.clamp(x, min=-20, max=20)  # Prevent overflow
+            weights = F.softmax(x_normalized, dim=1)  # (batch_size, C, hidden_dim)
+            
+            # Sample one channel index per batch and feature dimension
+            # Reshape for multinomial sampling
+            weights_reshaped = weights.permute(0, 2, 1).contiguous()  # (batch_size, hidden_dim, C)
+            
+            # Sample indices
+            sampled_indices = torch.multinomial(
+                weights_reshaped.view(-1, C), 
+                num_samples=1
+            ).view(batch_size, hidden_dim)  # (batch_size, hidden_dim)
+            
+            # Gather sampled values
+            x_reshaped = x.permute(0, 2, 1)  # (batch_size, hidden_dim, C)
+            sampled_output = torch.gather(
+                x_reshaped, 
+                dim=2, 
+                index=sampled_indices.unsqueeze(-1)
+            ).squeeze(-1)  # (batch_size, hidden_dim)
+            
+            return sampled_output
+        else:
+            # Evaluation mode: Probabilistic averaging
+            x_normalized = torch.clamp(x, min=-20, max=20)  # Prevent overflow
+            weights = F.softmax(x_normalized, dim=1)  # (batch_size, C, hidden_dim)
+            pooled_output = (weights * x).sum(dim=1)  # (batch_size, hidden_dim)
+            return pooled_output
 
 class SimpleCoreModule(nn.Module):
     """
     A simplified, deterministic Core Aggregate-Redistribute Module.
     Uses Mean Pooling instead of Stochastic Pooling.
+    
+    Args:
+        hidden_dim: Hidden dimension size
+        core_dim: Core representation dimension
+        dropout: Dropout probability
+        use_layer_norm: Whether to use layer normalization
     """
-    def __init__(self, hidden_dim, core_dim, dropout=0.0):
+    def __init__(self, hidden_dim: int, core_dim: int, dropout: float = 0.0, use_layer_norm: bool = False):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.core_dim = core_dim
+        self.use_layer_norm = use_layer_norm
 
         # MLP1: Projects series representation from hidden_dim to core_dim
         self.mlp1 = MLP(hidden_dim, core_dim, hidden_dim=hidden_dim, dropout=dropout)
 
         # MLP2: Projects concatenated (series + core) back to hidden_dim
         self.mlp2 = MLP(hidden_dim + core_dim, hidden_dim, hidden_dim=hidden_dim + core_dim, dropout=dropout)
+        
+        # Optional layer normalization
+        if use_layer_norm:
+            self.layer_norm = nn.LayerNorm(hidden_dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of SimpleCoreModule.
+        
+        Args:
+            x: Input tensor of shape (batch_size, C, hidden_dim)
+            
+        Returns:
+            Output tensor of shape (batch_size, C, hidden_dim)
+        """
         # x shape: (batch_size, C, hidden_dim)
         batch_size, C, _ = x.shape
+        assert x.shape[-1] == self.hidden_dim, f"Expected hidden_dim={self.hidden_dim}, got {x.shape[-1]}"
 
         # 1. Get core representation
         x_mlp1 = self.mlp1(x) # (batch_size, C, core_dim)
@@ -78,17 +142,29 @@ class SimpleCoreModule(nn.Module):
         # 3. Apply MLP2 and add residual connection
         output = self.mlp2(fused_representation) # (batch_size, C, hidden_dim)
         output = output + x # Residual connection
+        
+        # 4. Optional layer normalization
+        if self.use_layer_norm:
+            # Apply layer norm across hidden_dim for each channel separately
+            output = self.layer_norm(output)
 
         return output
 
 class STarModule(nn.Module):
     """
     STar Aggregate-Redistribute Module as described in the paper.
+    
+    Args:
+        hidden_dim: Hidden dimension size
+        core_dim: Core representation dimension
+        dropout: Dropout probability
+        use_layer_norm: Whether to use layer normalization
     """
-    def __init__(self, hidden_dim, core_dim, dropout=0.0):
+    def __init__(self, hidden_dim: int, core_dim: int, dropout: float = 0.0, use_layer_norm: bool = False):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.core_dim = core_dim
+        self.use_layer_norm = use_layer_norm
 
         # MLP1: Projects series representation from hidden_dim to core_dim
         self.mlp1 = MLP(hidden_dim, core_dim, hidden_dim=hidden_dim, dropout=dropout)
@@ -96,10 +172,24 @@ class STarModule(nn.Module):
 
         # MLP2: Projects concatenated (series + core) back to hidden_dim
         self.mlp2 = MLP(hidden_dim + core_dim, hidden_dim, hidden_dim=hidden_dim + core_dim, dropout=dropout)
+        
+        # Optional layer normalization
+        if use_layer_norm:
+            self.layer_norm = nn.LayerNorm(hidden_dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of STarModule.
+        
+        Args:
+            x: Input tensor of shape (batch_size, C, hidden_dim)
+            
+        Returns:
+            Output tensor of shape (batch_size, C, hidden_dim)
+        """
         # x shape: (batch_size, C, hidden_dim)
         batch_size, C, _ = x.shape
+        assert x.shape[-1] == self.hidden_dim, f"Expected hidden_dim={self.hidden_dim}, got {x.shape[-1]}"
 
         # 1. Get core representation
         # Apply MLP1 to each series independently
@@ -118,6 +208,14 @@ class STarModule(nn.Module):
         # 3. Apply MLP2 and add residual connection
         output = self.mlp2(fused_representation) # (batch_size, C, hidden_dim)
         output = output + x # Residual connection
+        
+        # 4. Optional layer normalization
+        if self.use_layer_norm:
+            output = self.layer_norm(output)
+        
+        # 5. Check for NaN/Inf
+        if torch.isnan(output).any() or torch.isinf(output).any():
+            raise RuntimeError("NaN or Inf detected in STarModule output")
 
         return output
 
@@ -125,22 +223,37 @@ class SOFTS(nn.Module):
     """
     Series-cOre Fused Time Series forecaster (SOFTS) model.
     """
-    def __init__(self, input_dim, seq_len, pred_len, hidden_dim, core_dim, num_layers, dropout=0.0, use_simple_core=False): # Removed output_dim as it's implicitly input_dim
+    def __init__(self, input_dim: int, seq_len: int, pred_len: int, hidden_dim: int, 
+                 core_dim: int, num_layers: int, dropout: float = 0.0, 
+                 use_simple_core: bool = False, use_layer_norm: bool = False):
+        """
+        Initialize SOFTS model.
+        
+        Args:
+            input_dim: Number of input channels
+            seq_len: Length of lookback window
+            pred_len: Length of prediction horizon
+            hidden_dim: Hidden dimension size
+            core_dim: Core representation dimension
+            num_layers: Number of STAR layers
+            dropout: Dropout probability
+            use_simple_core: Whether to use SimpleCoreModule instead of STarModule
+            use_layer_norm: Whether to use layer normalization in STAR modules
+        """
         super().__init__()
         self.input_dim = input_dim
-        # self.output_dim = output_dim # Removed as it's implicitly input_dim
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.hidden_dim = hidden_dim
         self.core_dim = core_dim
         self.num_layers = num_layers
-
-
+        self.use_simple_core = use_simple_core
+        self.use_layer_norm = use_layer_norm
 
         # Stack of Modules
         layer_cls = SimpleCoreModule if use_simple_core else STarModule
         self.star_layers = nn.ModuleList([
-            layer_cls(hidden_dim, core_dim, dropout=dropout)
+            layer_cls(hidden_dim, core_dim, dropout=dropout, use_layer_norm=use_layer_norm)
             for _ in range(num_layers)
         ])
 

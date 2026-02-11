@@ -1,0 +1,11 @@
+model:
+  core_dim: 8
+  dropout: 0.0
+  hidden_dim: 16
+  input_dim: 7
+  name: SOFTS
+  num_layers: 1
+  output_dim: 7
+  pred_len: 12
+  seq_len: 24
+  use_simple_core: false

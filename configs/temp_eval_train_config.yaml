@@ -1,0 +1,11 @@
+train:
+  batch_size: 4
+  device: cpu
+  epochs: 1
+  learning_rate: 0.001
+  log_interval: 1
+  loss_function: MSE
+  optimizer: Adam
+  save_path: /home/duffer/Videos/SOFTS_Implementation/checkpoints_test
+  scheduler: CosineAnnealingLR
+  seed: 42

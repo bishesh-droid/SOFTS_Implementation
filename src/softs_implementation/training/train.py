@@ -8,11 +8,12 @@ import argparse
 from tqdm import tqdm
 import numpy as np
 from datetime import datetime
+import warnings
 
 from softs_implementation.models.softs_model import SOFTS
 from softs_implementation.data_processing.dataset import TimeSeriesDataset
 from softs_implementation.data_processing.transforms import ReversibleInstanceNormalization
-from softs_implementation.utils.metrics import MSE, MAE
+from softs_implementation.utils.metrics import MSE, MAE, RMSE
 from softs_implementation.utils.helpers import set_seed
 
 def train_model(config_path="configs/experiment_config.yaml"):
@@ -79,12 +80,49 @@ def train_model(config_path="configs/experiment_config.yaml"):
         core_dim=model_config['core_dim'],
         num_layers=model_config['num_layers'],
         dropout=model_config['dropout'],
-        use_simple_core=model_config.get('use_simple_core', False)
+        use_simple_core=model_config.get('use_simple_core', False),
+        use_layer_norm=model_config.get('use_layer_norm', False)
     ).to(device)
 
     optimizer_cls = getattr(optim, train_config['optimizer'])
     optimizer = optimizer_cls(model.parameters(), lr=train_config['learning_rate'])
     criterion = nn.MSELoss()
+    
+    # Learning rate scheduler
+    scheduler = None
+    if 'scheduler' in train_config and train_config['scheduler']:
+        scheduler_name = train_config['scheduler']
+        if scheduler_name == 'CosineAnnealingLR':
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=train_config['epochs'],
+                eta_min=train_config.get('min_lr', 1e-6)
+            )
+        elif scheduler_name == 'StepLR':
+            scheduler = optim.lr_scheduler.StepLR(
+                optimizer,
+                step_size=train_config.get('step_size', 10),
+                gamma=train_config.get('gamma', 0.1)
+            )
+        elif scheduler_name == 'ReduceLROnPlateau':
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode='min',
+                factor=train_config.get('factor', 0.5),
+                patience=train_config.get('lr_patience', 5),
+                min_lr=train_config.get('min_lr', 1e-6)
+            )
+        print(f"Using {scheduler_name} scheduler")
+    
+    # Gradient clipping threshold
+    gradient_clip = train_config.get('gradient_clip', None)
+    if gradient_clip:
+        print(f"Gradient clipping enabled with threshold: {gradient_clip}")
+    
+    # Early stopping parameters
+    early_stopping_patience = train_config.get('early_stopping_patience', None)
+    if early_stopping_patience:
+        print(f"Early stopping enabled with patience: {early_stopping_patience}")
 
     # Normalization layer
     norm_layer = ReversibleInstanceNormalization(model_config['input_dim']).to(device)
@@ -95,6 +133,8 @@ def train_model(config_path="configs/experiment_config.yaml"):
     
     best_val_loss = float('inf')
     best_epoch = -1
+    epochs_without_improvement = 0
+    training_history = {'train_loss': [], 'val_loss': [], 'val_mae': [], 'val_rmse': [], 'learning_rate': []}
 
     print("Starting Training Loop...")
     
@@ -120,7 +160,18 @@ def train_model(config_path="configs/experiment_config.yaml"):
             output_denorm = norm_layer.inverse(output, mean, std)
 
             loss = criterion(output_denorm, batch_y)
+            
+            # Check for NaN/Inf in loss
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"Warning: NaN or Inf detected in loss at epoch {epoch+1}. Skipping batch.")
+                continue
+            
             loss.backward()
+            
+            # Gradient clipping
+            if gradient_clip:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip)
+            
             optimizer.step()
             train_loss += loss.item()
             
@@ -152,21 +203,60 @@ def train_model(config_path="configs/experiment_config.yaml"):
         avg_val_loss = val_loss / len(val_loader)
         avg_val_mae = val_mae / len(val_loader)
         avg_val_mse = val_mse / len(val_loader)
+        avg_val_rmse = np.sqrt(avg_val_mse)
+        
+        # Get current learning rate
+        current_lr = optimizer.param_groups[0]['lr']
+        
+        # Store metrics in history
+        training_history['train_loss'].append(avg_train_loss)
+        training_history['val_loss'].append(avg_val_loss)
+        training_history['val_mae'].append(avg_val_mae)
+        training_history['val_rmse'].append(avg_val_rmse)
+        training_history['learning_rate'].append(current_lr)
 
-        print(f"Epoch {epoch+1} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Val MAE: {avg_val_mae:.4f} | Val RMSE: {np.sqrt(avg_val_mse):.4f}")
+        print(f"Epoch {epoch+1} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Val MAE: {avg_val_mae:.4f} | Val RMSE: {avg_val_rmse:.4f} | LR: {current_lr:.2e}")
 
         # Checkpointing
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             best_epoch = epoch + 1
+            epochs_without_improvement = 0
+            
             model_save_path = os.path.join(save_dir, "best_model.pth")
-            torch.save({
+            checkpoint = {
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': best_val_loss,
-                'config': config
-            }, model_save_path)
+                'config': config,
+                'training_history': training_history
+            }
+            
+            # Save scheduler state if available
+            if scheduler is not None and not isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                checkpoint['scheduler_state_dict'] = scheduler.state_dict()
+            
+            torch.save(checkpoint, model_save_path)
             print(f"--> Saved best model to {model_save_path}")
+        else:
+            epochs_without_improvement += 1
+        
+        # Update learning rate scheduler
+        if scheduler is not None:
+            if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(avg_val_loss)
+            else:
+                scheduler.step()
+        
+        # Early stopping check
+        if early_stopping_patience and epochs_without_improvement >= early_stopping_patience:
+            print(f"Early stopping triggered after {epoch+1} epochs (no improvement for {epochs_without_improvement} epochs)")
+            break
 
-    print(f"Training complete. Best Val Loss: {best_val_loss:.4f} at Epoch {best_epoch}")
+    print(f"\nTraining complete. Best Val Loss: {best_val_loss:.4f} at Epoch {best_epoch}")
+    
+    # Save final training history
+    history_path = os.path.join(save_dir, "training_history.npy")
+    np.save(history_path, training_history)
+    print(f"Saved training history to {history_path}")

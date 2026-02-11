@@ -33,7 +33,7 @@ def evaluate_model(config_path="configs/train_config.yaml", model_config_path="c
     dataset_name = data_config['dataset_name']
     print(f"Loading dataset: {dataset_name}")
 
-    target_cols = [f'feature_{i}' for i in range(model_config['input_dim'])]
+    target_cols = data_config.get('target_cols', None)
 
     # For evaluation, we typically use a dedicated test set.
     # Here, we'll just use the full dataset and assume a split for simplicity.
@@ -58,11 +58,17 @@ def evaluate_model(config_path="configs/train_config.yaml", model_config_path="c
         hidden_dim=model_config['hidden_dim'],
         core_dim=model_config['core_dim'],
         num_layers=model_config['num_layers'],
-        dropout=model_config['dropout']
+        dropout=model_config['dropout'],
+        use_simple_core=model_config.get('use_simple_core', False),
+        use_layer_norm=model_config.get('use_layer_norm', False)
     ).to(device)
 
     if checkpoint_path:
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            model.load_state_dict(checkpoint)
         print(f"Loaded model from {checkpoint_path}")
     else:
         print("Warning: No checkpoint path provided. Evaluating untrained model or randomly initialized model.")

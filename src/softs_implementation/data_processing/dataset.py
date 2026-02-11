@@ -37,10 +37,22 @@ class TimeSeriesDataset(Dataset):
             raise FileNotFoundError(f"Dataset file not found at: {self.data_path}")
 
         df = pd.read_csv(self.data_path, index_col='date', parse_dates=True)
+        
+        # Get available columns (excluding index)
+        available_columns = df.columns.tolist()
 
         if self.target_cols:
+            # Validate that target_cols exist in the dataframe
+            missing_cols = [col for col in self.target_cols if col not in available_columns]
+            if missing_cols:
+                raise KeyError(
+                    f"Target columns {missing_cols} not found in dataset. "
+                    f"Available columns: {available_columns}. "
+                    f"Please update 'target_cols' in your config or set to None to use all columns."
+                )
             self.data = df[self.target_cols].values
         else:
+            # Use all available columns
             self.data = df.values
 
         # Convert to float32

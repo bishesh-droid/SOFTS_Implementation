@@ -1,29 +1,55 @@
 experiment:
-  name: "softs_base_run"
+  name: 'softs_experiment'
   seed: 42
-  device: "cuda"
+  device: 'cuda'
 
 data:
-  dataset_name: "ETTh1.csv"
-  root_path: "data/raw"
+  dataset_name: 'ETTh1'
   seq_len: 96
-  pred_len: 24
-  target_cols: null # null means all columns
-  noise_level: 0.0 # Standard deviation of Gaussian noise to add during training
+  pred_len: 96
+  target_cols: null  # null means use all available columns
+  noise_level: 0.0
 
 model:
-  name: "SOFTS"
-  input_dim: 7 # Will be overwritten by dataset if meaningful
-  hidden_dim: 512
-  core_dim: 128
+  name: 'SOFTS'
+  input_dim: 7       # Will be inferred from data
+  seq_len: 96
+  pred_len: 96
+  hidden_dim: 128
+  core_dim: 64
   num_layers: 2
   dropout: 0.1
-  use_simple_core: false # If true, uses SimpleCoreModule instead of STarModule
+  use_simple_core: false
+  use_layer_norm: false  # Enable layer normalization in STAR modules
 
 train:
-  epochs: 10
+  epochs: 50
   batch_size: 32
-  learning_rate: 0.0001
-  optimizer: "Adam"
-  patience: 3
-  save_path: "checkpoints"
+  learning_rate: 0.001
+  optimizer: 'Adam'
+  loss_function: 'MSE'
+  
+  # Learning rate scheduler
+  scheduler: 'CosineAnnealingLR'  # Options: 'CosineAnnealingLR', 'StepLR', 'ReduceLROnPlateau', null
+  min_lr: 1e-6  # Minimum learning rate for cosine annealing
+  
+  # For StepLR scheduler
+  step_size: 10
+  gamma: 0.1
+  
+  # For ReduceLROnPlateau scheduler
+  factor: 0.5
+  lr_patience: 5
+  
+  # Gradient clipping
+  gradient_clip: 1.0  # Set to null to disable
+  
+  # Early stopping
+  early_stopping_patience: 10  # Set to null to disable
+  
+  # Checkpointing
+  save_path: 'checkpoints'
+  log_interval: 1
+  
+  device: 'cuda'
+  seed: 42

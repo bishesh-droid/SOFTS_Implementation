@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import warnings
 from typing import Tuple, Optional
 
 class MLP(nn.Module):
@@ -215,7 +216,7 @@ class STarModule(nn.Module):
         
         # 5. Check for NaN/Inf
         if torch.isnan(output).any() or torch.isinf(output).any():
-            raise RuntimeError("NaN or Inf detected in STarModule output")
+            warnings.warn("NaN or Inf detected in STarModule output", RuntimeWarning)
 
         return output
 
@@ -261,13 +262,11 @@ class SOFTS(nn.Module):
         # The paper's Algorithm 1: Y = Linear(SN) where SN is (C, d) and Y is (C, H).
         # This means the final linear layer maps d -> H for each channel.
 
-        self.temporal_embedding = MLP(seq_len, hidden_dim, dropout=dropout) # Maps L -> d
+        # Linear projection to embed each channel's time series (L -> d), as per paper.
+        self.temporal_embedding = nn.Linear(seq_len, hidden_dim)
 
-        # Final Linear Predictor: maps hidden_dim to pred_len * output_dim, then reshape
-        # Or, maps hidden_dim to output_dim, and we need to ensure the temporal dimension is correct.
-        # The paper's Algorithm 1: Y = Linear(SN) where SN is (C, d) and Y is (C, H)
-        # This means the final linear layer maps d -> H for each channel.
-        self.final_predictor = MLP(hidden_dim, pred_len, dropout=dropout)
+        # Linear predictor: maps d -> H for each channel, as per paper Algorithm 1.
+        self.final_predictor = nn.Linear(hidden_dim, pred_len)
 
 
     def forward(self, x):

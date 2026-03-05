@@ -2,9 +2,10 @@ import pytest
 import os
 import torch
 import yaml
+import numpy as np
+import pandas as pd
 from softs_implementation.training.train import train_model
 from softs_implementation.evaluation.evaluate import evaluate_model
-from softs_implementation.data.scripts.download_data import download_ett_data
 
 # Define paths relative to the project root
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,11 +18,18 @@ def setup_data_and_configs():
     """
     Ensures dummy data and test configs are present before running tests.
     """
-    # Create dummy data
+    # Create synthetic dummy data if not already present
     os.makedirs(DATA_RAW_DIR, exist_ok=True)
     dummy_data_path = os.path.join(DATA_RAW_DIR, "ETTh1.csv")
+    created_dummy = False
     if not os.path.exists(dummy_data_path):
-        download_ett_data()
+        dates = pd.date_range(start='2016-07-01', periods=300, freq='h')
+        cols = ['HUFL', 'HULL', 'MUFL', 'MULL', 'LUFL', 'LULL', 'OT']
+        data = np.random.rand(300, len(cols)).astype(np.float32)
+        df = pd.DataFrame(data, columns=cols, index=dates)
+        df.index.name = 'date'
+        df.to_csv(dummy_data_path)
+        created_dummy = True
 
     # Create test config file
     test_experiment_config_path = os.path.join(CONFIGS_DIR, "test_experiment_config.yaml")
@@ -71,7 +79,7 @@ def setup_data_and_configs():
     yield
 
     # Teardown: clean up generated files
-    if os.path.exists(dummy_data_path):
+    if created_dummy and os.path.exists(dummy_data_path):
         os.remove(dummy_data_path)
     if os.path.exists(test_experiment_config_path):
         os.remove(test_experiment_config_path)

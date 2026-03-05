@@ -115,7 +115,7 @@ Input: (batch, seq_len, C)   ← C = number of channels/variables
          │
          ▼
   ┌─────────────────────────────────┐
-  │  Temporal Embedding (per channel)│   seq_len → hidden_dim
+  │  Linear Embedding (per channel) │   nn.Linear: seq_len → hidden_dim
   └─────────────────────────────────┘
          │
          ▼  (repeated N times)
@@ -131,7 +131,7 @@ Input: (batch, seq_len, C)   ← C = number of channels/variables
          │
          ▼
   ┌─────────────────────────────────┐
-  │  Linear Predictor (per channel) │   hidden_dim → pred_len
+  │  Linear Predictor (per channel) │   nn.Linear: hidden_dim → pred_len
   └─────────────────────────────────┘
          │
          ▼
@@ -315,7 +315,7 @@ Enhancements beyond the base NeurIPS 2024 paper:
 | Training History | Metrics and LR curves saved with each checkpoint |
 | Layer Normalization | Optional LayerNorm in STAR and SimpleCoreModule |
 | PyTorch 2.6 Support | Fixed `torch.load` for latest PyTorch versions |
-| Comprehensive Tests | Full unit + integration test coverage |
+| Comprehensive Tests | Full unit + integration test coverage (synthetic data, no download needed) |
 
 See `CHANGELOG.md` for full details.
 
@@ -346,7 +346,7 @@ See `CHANGELOG.md` for full details.
 
 **Integration test failures:**
 - Install the package: `pip install -e .` or `poetry install`
-- Ensure `data/raw/ETTh1.csv` exists (see [Download Dataset](#download-dataset))
+- Integration tests create their own synthetic data — no dataset download is required locally
 - Confirm Python version is 3.9–3.13
 
 ---
